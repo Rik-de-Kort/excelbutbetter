@@ -1,0 +1,117 @@
+<!DOCTYPE htmange>
+<html>
+  <head>
+      <title>EBB Prototype</title>
+      <script src="https://cdn.jsdelivr.net/pyodide/v0.17.0/full/pyodide.js"></script>
+  </head>
+  <style>
+    #content td {
+      min-width: 100px;
+      border: 1px solid gray;
+    }
+
+    #content td.rownum {
+      min-width: 0px;
+    }
+
+    #formulaBarContainer {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+    
+    #formulaBar {
+      margin: 5px;
+      width: 50%;
+      height: 3em;
+    }
+  </style>
+  <body>
+    <input id="fileUpload" type="file">
+    <button id="commit" type="button">Commit changes</button>
+    <a id="fileDownload"><button>Download it</button></a>
+
+    <br>
+
+    <div id="content">
+      <div id="formulaBarContainer"><input id="formulaBar" type="text"></div>
+      <div id="sheet"></table>
+    </div>
+    
+    <script type="text/javascript">
+      async function main(){
+        await loadPyodide({
+          indexURL : "https://cdn.jsdelivr.net/pyodide/v0.17.0/full/"
+        });
+        console.log(pyodide.runPython(`
+            import sys
+            sys.version
+        `));
+        
+      }
+      main();
+
+      const fileDownload = document.getElementById('fileDownload');
+      const fileUpload = document.getElementById('fileUpload');
+      let fileUrl = ''
+      fileUpload.addEventListener("change", handleFiles, false);
+      let tableToHTML = (...rest) => {};
+      let updateCell = (...rest) => {};
+      let commit = (...rest) => {};
+
+      async function handleFiles(e) {
+        console.log("Uploaded a file!");
+        self.file = await fileUpload.files[0].arrayBuffer();
+        pyodide.runPython(`{{PYTHON_STARTUP}}`);
+        commit = pyodide.globals.get('commit');
+        tableToHTML = pyodide.globals.get('table_to_html');
+        updateCell = pyodide.globals.get('update_cell');
+        document.querySelector('#sheet').innerHTML = tableToHTML();
+      }
+
+      document.querySelector('#sheet').innerHTML = tableToHTML();
+
+      function cellHandleKeydown(e) {
+        // Note we do not handle input here. That belongs in an input handler.
+        let i = e.target.parentElement.rowIndex - 1;  // rowIndex includes header row
+        let j = e.target.cellIndex - 1; // cellIndex includes initial cells
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          console.log(`Trying to write ${e.target.innerText.trim()}`);
+          updateCell(i, j, e.target.innerText.trim());
+          e.target.parentElement.nextSibling.children[e.target.cellIndex].focus();
+        } else if (e.key === 'Tab') {
+          console.log(`Trying to write ${e.target.innerText.trim()}`);
+          updateCell(i, j, e.target.innerText);
+        } else if (e.key === 'Escape') {
+          // Todo(Rik): handle escape
+        }
+      }
+      document.querySelector('#content').addEventListener('keydown', cellHandleKeydown);
+
+      function cellHandleInput(e) {
+        // Note that input events do not detect tabs and enters etc. We handle those separately.
+        document.querySelector('#formulaBar').value = e.target.innerText.trim();
+      }
+      document.querySelector('#content').addEventListener('input', cellHandleInput);
+
+      document.querySelector("#commit").addEventListener("click", (e) => commit());
+
+      function handleDownload(e) { 
+          pyodide.runPython(`
+            with open(fname, 'rb') as handle:
+              b_new = handle.read()
+          `);
+          const bJs = pyodide.globals.get('b_new');
+          const blob = new Blob([bJs.toJs()], {type: 'application/vnd.sqlite3'});
+          fileUrl = URL.createObjectURL(blob, 'test.sqlite');
+
+          const fileDownload = document.querySelector("#fileDownload");
+          fileDownload.href = fileUrl;
+          fileDownload.download = 'test.sqlite';
+          fileDownload.addEventListener("mouseup", async (e) => { setTimeout(() => URL.revokeObjectURL(fileUrl), 1000);});
+      }
+      document.querySelector('#fileDownload').addEventListener("click", handleDownload);
+    </script>
+  </body>
+</html>
