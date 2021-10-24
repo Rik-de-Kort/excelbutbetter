@@ -3,3 +3,5 @@ venv
 **/.hypothesis
 **/.ipynb_checkpoints
 **/*.sqlite
+ebb
+docs
